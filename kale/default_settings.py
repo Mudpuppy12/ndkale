@@ -75,3 +75,7 @@ if six.PY2:
     PICKLE_PROTOCOL = 0
 else:
     PICKLE_PROTOCOL = pickle.DEFAULT_PROTOCOL
+
+# Skip using a COMPRESSOR, and ENCRYPTION, and PICKLE and push json string
+# Onto message queue.
+JSON_MESSAGING = False

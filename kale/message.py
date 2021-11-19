@@ -2,6 +2,8 @@
 from __future__ import absolute_import
 
 import pickle
+import json
+
 
 import six
 
@@ -15,6 +17,7 @@ _decompressor = settings.DECOMPRESSOR
 _task_size_limit = settings.SQS_TASK_SIZE_LIMIT
 _get_current_timestamp = settings.TIMESTAMP_FUNC
 _get_publisher_data = settings.PUBLISHER_STR_FUNC
+_json_messaging = settings.JSON_MESSAGING
 
 
 class KaleMessage:
@@ -131,17 +134,21 @@ class KaleMessage:
         :return: string for encoded message.
         :rtype: str
         """
-
-        compressed_msg = _compressor(
-            pickle.dumps(self._get_message_body(), protocol=settings.PICKLE_PROTOCOL))
-        compressed_msg = crypt.encrypt(compressed_msg)
+        if not _json_messaging:
+           compressed_msg = _compressor(
+               pickle.dumps(self._get_message_body(), protocol=settings.PICKLE_PROTOCOL))    
+           compressed_msg = crypt.encrypt(compressed_msg)
+           
         # Check compressed task size.
-        if len(compressed_msg) >= _task_size_limit:
-            raise exceptions.ChubbyTaskException(
-                'Task %s is over the limit of %d bytes.' % (self.task_id,
-                                                            _task_size_limit))
+           if len(compressed_msg) >= _task_size_limit:
+               raise exceptions.ChubbyTaskException(
+                   'Task %s is over the limit of %d bytes.' % (self.task_id,
+                                                               _task_size_limit))
+        
+           return compressed_msg.decode("utf-8")
 
-        return compressed_msg.decode("utf-8")
+        return json.dumps(self._get_message_body())
+
 
     @classmethod
     def decode_sqs(cls, sqs_message):
@@ -153,8 +160,12 @@ class KaleMessage:
         :rtype: KaleMessage
         """
 
-        message_body = crypt.decrypt(sqs_message.body)
-        message_body = pickle.loads(_decompressor(message_body))
+        if not _json_messaging:
+           message_body = crypt.decrypt(sqs_message.body)
+           message_body = pickle.loads(_decompressor(message_body))
+        else:
+           message_body = json.loads(sqs_message.body)
+
         # queue_url format is https://queue.amazonaws.com/<account id>/<queue name>
         sqs_queue_name = sqs_message.queue_url.rsplit('/', 1)[1]
 
